@@ -1,3 +1,5 @@
+require "capistrano/upload_task"
+
 module Capistrano
   module TaskEnhancements
     def before(task, prerequisite, *args, &block)
@@ -7,29 +9,33 @@ module Capistrano
 
     def after(task, post_task, *args, &block)
       Rake::Task.define_task(post_task, *args, &block) if block_given?
-      post_task = Rake::Task[post_task]
-      Rake::Task[task].enhance do
-        post_task.invoke
+      task = Rake::Task[task]
+      task.enhance do
+        post = Rake.application.lookup(post_task, task.scope)
+        raise ArgumentError, "Task #{post_task.inspect} not found" unless post
+        post.invoke
       end
     end
 
     def remote_file(task)
+      warn("[Deprecation Warning] `remote_file` is deprecated and will be "\
+           "removed in Capistrano 3.7.0")
+
       target_roles = task.delete(:roles) { :all }
       define_remote_file_task(task, target_roles)
     end
 
     def define_remote_file_task(task, target_roles)
-      Rake::Task.define_task(task) do |t|
+      Capistrano::UploadTask.define_task(task) do |t|
         prerequisite_file = t.prerequisites.first
         file = shared_path.join(t.name)
 
         on roles(target_roles) do
-          unless test "[ -f #{file} ]"
+          unless test "[ -f #{file.to_s.shellescape} ]"
             info "Uploading #{prerequisite_file} to #{file}"
             upload! File.open(prerequisite_file), file
           end
         end
-
       end
     end
 
@@ -51,14 +57,13 @@ module Capistrano
     end
 
     def exit_deploy_because_of_exception(ex)
-      warn t(:deploy_failed, ex: ex.inspect)
-      invoke 'deploy:failed'
+      warn t(:deploy_failed, ex: ex.message)
+      invoke "deploy:failed"
       exit(false)
     end
 
     def deploying?
       fetch(:deploying, false)
     end
-
   end
 end

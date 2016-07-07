@@ -1,60 +1,37 @@
+require "forwardable"
+
 module Capistrano
   module DSL
     module Env
+      extend Forwardable
+      def_delegators :env,
+                     :configure_backend, :fetch, :set, :set_if_empty, :delete,
+                     :ask, :role, :server, :primary, :validate, :append,
+                     :remove, :dry_run?, :install_plugin
 
-      def configure_backend
-        env.configure_backend
-      end
-
-      def fetch(key, default=nil, &block)
-        env.fetch(key, default, &block)
+      def is_question?(key)
+        env.is_question?(key)
       end
 
       def any?(key)
-        value = fetch(key)
-        if value && value.respond_to?(:any?)
-          value.any?
-        else
-          !fetch(key).nil?
-        end
-      end
-
-      def set(key, value)
-        env.set(key, value)
-      end
-
-      def delete(key)
-        env.delete(key)
-      end
-
-      def ask(key, value)
-        env.ask(key, value)
-      end
-
-      def role(name, servers, options={})
-        env.role(name, servers, options)
-      end
-
-      def server(name, properties={})
-        env.server(name, properties)
+        env.any?(key)
       end
 
       def roles(*names)
         env.roles_for(names.flatten)
       end
 
-      def release_roles(*names)
-        options = { exclude: :no_release }
-        if names.last.is_a? Hash
-          names.last.merge(options)
-        else
-          names << options
-        end
-        roles(*names)
+      def role_properties(*names, &block)
+        env.role_properties_for(names, &block)
       end
 
-      def primary(role)
-        env.primary(role)
+      def release_roles(*names)
+        if names.last.is_a? Hash
+          names.last[:exclude] = :no_release
+        else
+          names << { exclude: :no_release }
+        end
+        roles(*names)
       end
 
       def env
@@ -68,7 +45,6 @@ module Capistrano
       def asset_timestamp
         env.timestamp.strftime("%Y%m%d%H%M.%S")
       end
-
     end
   end
 end

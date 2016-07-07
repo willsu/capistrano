@@ -1,26 +1,50 @@
-require 'spec_helper'
+require "spec_helper"
 
 describe Capistrano::Application do
-
   it "provides a --trace option which enables SSHKit/NetSSH trace output"
 
   it "provides a --format option which enables the choice of output formatting"
 
-  it "identifies itself as cap and not rake" do
-    out, _ = capture_io do
-      flags '--help', '-h'
+  let(:help_output) do
+    out, _err = capture_io do
+      flags "--help", "-h"
     end
-    out.lines.first.should match(/cap \[-f rakefile\]/)
+    out
+  end
+
+  it "displays documentation URL as help banner" do
+    expect(help_output.lines.first).to match(/capistranorb.com/)
+  end
+
+  %w(quiet silent verbose).each do |switch|
+    it "doesn't include --#{switch} in help" do
+      expect(help_output).not_to match(/--#{switch}/)
+    end
   end
 
   it "overrides the rake method, but still prints the rake version" do
-    out, _ = capture_io do
-      flags '--version', '-V'
+    out, _err = capture_io do
+      flags "--version", "-V"
     end
-    out.should match(/\bCapistrano Version\b/)
-    out.should match(/\b#{Capistrano::VERSION}\b/)
-    out.should match(/\bRake Version\b/)
-    out.should match(/\b#{RAKEVERSION}\b/)
+    expect(out).to match(/\bCapistrano Version\b/)
+    expect(out).to match(/\b#{Capistrano::VERSION}\b/)
+    expect(out).to match(/\bRake Version\b/)
+    expect(out).to match(/\b#{Rake::VERSION}\b/)
+  end
+
+  it "overrides the rake method, and sets the sshkit_backend to SSHKit::Backend::Printer" do
+    capture_io do
+      flags "--dry-run", "-n"
+    end
+    sshkit_backend = Capistrano::Configuration.fetch(:sshkit_backend)
+    expect(sshkit_backend).to eq(SSHKit::Backend::Printer)
+  end
+
+  it "enables printing all config variables on command line parameter" do
+    capture_io do
+      flags "--print-config-variables", "-p"
+    end
+    expect(Capistrano::Configuration.fetch(:print_config_variables)).to be true
   end
 
   def flags(*sets)
@@ -33,7 +57,7 @@ describe Capistrano::Application do
 
   def command_line(*options)
     options.each { |opt| ARGV << opt }
-    def subject.exit(*args)
+    subject.define_singleton_method(:exit) do |*_args|
       throw(:system_exit, :exit)
     end
     subject.run
@@ -41,11 +65,14 @@ describe Capistrano::Application do
   end
 
   def capture_io
-    require 'stringio'
+    require "stringio"
 
-    orig_stdout, orig_stderr         = $stdout, $stderr
-    captured_stdout, captured_stderr = StringIO.new, StringIO.new
-    $stdout, $stderr                 = captured_stdout, captured_stderr
+    orig_stdout = $stdout
+    orig_stderr = $stderr
+    captured_stdout = StringIO.new
+    captured_stderr = StringIO.new
+    $stdout = captured_stdout
+    $stderr = captured_stderr
 
     yield
 
@@ -54,5 +81,4 @@ describe Capistrano::Application do
     $stdout = orig_stdout
     $stderr = orig_stderr
   end
-
 end

@@ -1,7 +1,6 @@
-require 'spec_helper'
+require "spec_helper"
 
 module Capistrano
-
   class DummyDSL
     include DSL
   end
@@ -10,41 +9,40 @@ module Capistrano
   describe DSL do
     let(:dsl) { DummyDSL.new }
 
-    describe '#t' do
+    describe "#t" do
       before do
-        I18n.expects(:t).with(:phrase, {count: 2, scope: :capistrano})
+        I18n.expects(:t).with(:phrase, count: 2, scope: :capistrano)
       end
 
-      it 'delegates to I18n' do
+      it "delegates to I18n" do
         dsl.t(:phrase, count: 2)
       end
     end
 
-    describe '#stage_set?' do
+    describe "#stage_set?" do
       subject { dsl.stage_set? }
 
-      context 'stage is set' do
+      context "stage is set" do
         before do
           dsl.set(:stage, :sandbox)
         end
-        it { should be_true }
+        it { expect(subject).to be_truthy }
       end
 
-      context 'stage is not set' do
+      context "stage is not set" do
         before do
           dsl.set(:stage, nil)
         end
-        it { should be_false }
+        it { expect(subject).to be_falsey }
       end
     end
 
-    describe '#sudo' do
-
+    describe "#sudo" do
       before do
         dsl.expects(:execute).with(:sudo, :my, :command)
       end
 
-      it 'prepends sudo, delegates to execute' do
+      it "prepends sudo, delegates to execute" do
         dsl.sudo(:my, :command)
       end
     end

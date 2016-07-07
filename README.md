@@ -1,30 +1,127 @@
-# Capistrano [![Build Status](https://travis-ci.org/capistrano/capistrano.png?branch=v3)](https://travis-ci.org/capistrano/capistrano) [![Code Climate](https://codeclimate.com/github/capistrano/capistrano.png)](https://codeclimate.com/github/capistrano/capistrano)
 
-## Requirements
+# Capistrano: A deployment automation tool built on Ruby, Rake, and SSH.
 
-* Ruby >= 1.9 (JRuby and C-Ruby/YARV are supported)
+[![Gem Version](https://badge.fury.io/rb/capistrano.svg)](http://badge.fury.io/rb/capistrano) [![Build Status](https://travis-ci.org/capistrano/capistrano.svg?branch=master)](https://travis-ci.org/capistrano/capistrano) [![Code Climate](https://img.shields.io/codeclimate/github/capistrano/capistrano.svg)](https://codeclimate.com/github/capistrano/capistrano) <a href="http://codersclan.net/?repo_id=325&source=small"><img src="https://img.shields.io/badge/get-support-blue.svg"></a>
 
-## Installation
+Capistrano is a framework for building automated deployment scripts. Although Capistrano itself is written in Ruby, it can easily be used to deploy projects of any language or framework, be it Rails, Java, or PHP.
 
-Add this line to your application's Gemfile:
+Once installed, Capistrano gives you a `cap` tool to perform your deployments from the comfort of your command line.
 
-``` ruby
-gem 'capistrano', '~> 3.0.1'
+```
+$ cd my-capistrano-enabled-project
+$ cap production deploy
 ```
 
-And then execute:
+When you run `cap`, Capistrano dutifully connects to your server(s) via SSH and executes the steps necessary to deploy your project. You can define those steps yourself by writing [Rake](https://github.com/ruby/rake) tasks, or by using pre-built task libraries provided by the Capistrano community.
+
+Tasks are simple to make. Here's an example:
+
+```ruby
+task :restart_sidekiq do
+  on roles(:worker) do
+    execute :service, "sidekiq restart"
+  end
+end
+after "deploy:published", "restart_sidekiq"
+```
+
+*Note: This documentation is for the current version of Capistrano (3.x). If you are looking for Capistrano 2.x documentation, you can find it in [this archive](https://github.com/capistrano/capistrano-2.x-docs).*
+
+---
+
+## Contents
+
+* [Features](#features)
+* [Gotchas](#gotchas)
+* [Quick start](#quick-start)
+* [Finding help and documentation](#finding-help-and-documentation)
+* [How to contribute](#how-to-contribute)
+* [License](#license)
+
+## Features
+
+There are many ways to automate deployments, from simple rsync bash scripts to complex containerized toolchains. Capistrano sits somewhere in the middle: it automates what you already know how to do manually with SSH, but in a repeatable, scalable fashion. There is no magic here!
+
+Here's what makes Capistrano great:
+
+#### Strong conventions
+
+Capistrano defines a standard deployment process that all Capistrano-enabled projects follow by default. You don't have to decide how to structure your scripts, where deployed files should be placed on the server, or how to perform common tasks: Capistrano has done this work for you.
+
+#### Multiple stages
+
+Define your deployment once, and then easily parameterize it for multiple *stages* (environments), e.g. `qa`, `staging`, and `production`. No copy-and-paste necessary: you only need to specify what is different for each stage, like IP addresses.
+
+#### Parallel execution
+
+Deploying to a fleet of app servers? Capistrano can run each deployment task concurrently across those servers and uses connection pooling for speed.
+
+#### Server roles
+
+Your application may need many different types of servers: a database server, an app server, two app servers, and a job queue work server, for example. Capistrano lets you tag each server with one or more roles, so you can control what tasks are executed where.
+
+#### Community driven
+
+Capistrano is easily extensible using the rubygems package manager. Deploying a Rails app? Wordpress? Laravel? Chances are, someone has already written Capistrano tasks for your framework of choice and has distributed it as a gem. Many Ruby projects also come with Capistrano tasks built-in.
+
+#### It's just SSH
+
+Everything in Capistrano comes down to running SSH commands on remote servers. On the one hand, that makes Capistrano simple. On the other hand, if you aren't comfortable SSH-ing into a Linux box and doing stuff on the command-line, then Capistrano is probably not for you.
+
+## Gotchas
+
+While Capistrano ships with a strong set of conventions that are common for all types of deployments, it needs help understanding the specifics of your project, and there are some things Capistrano is not suited to do.
+
+#### Project specifics
+
+Out of the box, Capistrano can deploy your code to server(s), but it does not know how to *execute* your code. Does `foreman` need to be run? Does Apache need to be restarted? You'll need to tell Capistrano how to do this part by writing these deployment steps yourself, or by finding a gem in the Capistrano community that does it for you.
+
+#### Key-based SSH
+
+Capistrano depends on connecting to your server(s) with SSH using key-based (i.e. password-less) authentication. You'll need this working before you can use Capistrano.
+
+#### Provisioning
+
+Likewise, your server(s) will likely need supporting software installed before you can perform a deployment. Capistrano itself has no requirements other than SSH, but your application probably needs database software, a web server like Apache or Nginx, and a language runtime like Java, Ruby, or PHP. These *server provisioning* steps are not done by Capistrano.
+
+#### `sudo`, etc.
+
+Capistrano is designed to deploy using a single, non-privileged SSH user, using a *non-interactive* SSH session. If your deployment requires `sudo`, interactive prompts, authenticating as one user but running commands as another, you can probably accomplish this with Capistrano, but it may be difficult. Your automated deployments will be much smoother if you can avoid such requirements.
+
+## Quick start
+
+### Requirements
+
+* Ruby version 2.0 or higher on your local machine (MRI or Rubinius)
+* A project that uses source control (Git, Mercurial, and Subversion support is built-in)
+* The SCM binaries (e.g. `git`, `hg`) needed to check out your project must be installed on the server(s) you are deploying to
+* [Bundler](http://bundler.io), along with a Gemfile for your project, are recommended
+
+### Install the Capistrano gem
+
+Add Capistrano to your project's Gemfile:
+
+``` ruby
+group :development do
+  gem "capistrano", "~> 3.4"
+end
+```
+
+Then run Bundler to ensure Capistrano is downloaded and installed:
 
 ``` sh
 $ bundle install
 ```
 
-Capify:
-*make sure there's no "Capfile" or "capfile" present*
+### "Capify" your project
+
+Make sure your project doesn't already have a "Capfile" or "capfile" present. Then run:
+
 ``` sh
 $ bundle exec cap install
 ```
 
-This creates the following files:
+This creates all the necessary configuration files and directory structure for a Capistrano-enabled project with two stages, `staging` and `production`:
 
 ```
 ├── Capfile
@@ -38,198 +135,67 @@ This creates the following files:
             └── tasks
 ```
 
-To create different stages:
+To customize the stages that are created, use:
 
 ``` sh
 $ bundle exec cap install STAGES=local,sandbox,qa,production
 ```
 
-## Usage
+Note that the files that Capistrano creates are simply templates to get you started. Make sure to edit the `deploy.rb` and stage files so they contain values appropriate for your project and your target servers.
+
+### Command-line usage
 
 ``` sh
-$ bundle exec cap -vT
+# list all available tasks
+$ bundle exec cap -T
 
+# deploy to the staging environment
 $ bundle exec cap staging deploy
+
+# deploy to the production environment
 $ bundle exec cap production deploy
 
+# simulate deploying to the production environment
+# does not actually do anything
 $ bundle exec cap production deploy --dry-run
+
+# list task dependencies
 $ bundle exec cap production deploy --prereqs
+
+# trace through task invocations
 $ bundle exec cap production deploy --trace
+
+# lists all config variable before deployment tasks
+$ bundle exec cap production deploy --print-config-variables
 ```
 
-## Tasks
+## Finding help and documentation
 
-``` ruby
-server 'example.com', roles: [:web, :app]
-server 'example.org', roles: [:db, :workers]
-desc "Report Uptimes"
-task :uptime do
-  on roles(:all) do |host|
-    info "Host #{host} (#{host.roles.to_a.join(', ')}):\t#{capture(:uptime)}"
-  end
-end
-```
+Capistrano is a large project encompassing multiple GitHub repositories and a community of plugins, and it can be overwhelming when you are just getting started. Here are resources that can help:
 
-## Before / After
+* **[The Capistrano website](http://capistranorb.com) is the best place for official documentation**
+* [Stack Overflow](http://stackoverflow.com/questions/tagged/capistrano) has a Capistrano tag with lots of activity
+* [The Capistrano mailing list](https://groups.google.com/forum/#!forum/capistrano) is low-traffic but is monitored by Capistrano contributors
+* [CodersClan](http://codersclan.net/?repo_id=325&source=link) has Capistrano experts available to solve problems for bounties
 
-Where calling on the same task name, executed in order of inclusion
+Related GitHub repositories:
 
-``` ruby
-# call an existing task
-before :starting, :ensure_user
+* [capistrano/sshkit](https://github.com/capistrano/sshkit) provides the SSH behavior that underlies Capistrano (when you use `execute` in a Capistrano task, you are using SSHKit)
+* [capistrano/documentation](https://github.com/capistrano/documentation) is what generates the official Capistrano website
+* [capistrano/rails](https://github.com/capistrano/rails) is a very popular gem that adds Ruby on Rails deployment tasks
+* [mattbrictson/airbrussh](https://github.com/mattbrictson/airbrussh) provides Capistrano's default log formatting
 
-after :finishing, :notify
+GitHub issues are for bug reports and feature requests. Please refer to the [CONTRIBUTING](CONTRIBUTING.md) document for guidelines on submitting GitHub issues.
 
+## How to contribute
 
-# or define in block
-before :starting, :ensure_user do
-  #
-end
+Contributions to Capistrano, in the form of code, documentation or idea, are gladly accepted. Read the [DEVELOPMENT](DEVELOPMENT.md) document to learn how to hack on Capistrano's code, run the tests, and contribute your first pull request.
 
-after :finishing, :notify do
-  #
-end
-```
+## License
 
-If it makes sense for your use case (often, that means *generating a file*)
-the Rake prerequisite mechanism can be used:
+MIT License (MIT)
 
-``` ruby
-desc "Create Important File"
-file 'important.txt' do |t|
-  sh "touch #{t.name}"
-end
-desc "Upload Important File"
-task :upload => 'important.txt' do |t|
-  on roles(:all) do
-    upload!(t.prerequisites.first, '/tmp')
-  end
-end
-```
-
-The final way to call out to other tasks is to simply `invoke()` them:
-
-``` ruby
-task :one do
-  on roles(:all) { info "One" }
-end
-task :two do
-  invoke :one
-  on roles(:all) { info "Two" }
-end
-```
-
-This method is widely used.
-
-## Getting User Input
-
-``` ruby
-desc "Ask about breakfast"
-task :breakfast do
-  ask(:breakfast, "pancakes")
-  on roles(:all) do |h|
-    execute "echo \"$(whoami) wants #{fetch(:breakfast)} for breakfast!\""
-  end
-end
-```
-
-Perfect, who needs telephones.
-
-
-## Running local tasks
-
-Local tasks can be run by replacing `on` with `run_locally`
-
-``` ruby
-desc "Notify service of deployment"
-task :notify do
-  run_locally do
-    with rails_env: :development do
-      rake 'service:notify'
-    end
-  end
-end
-```
-
-## Console
-
-**Note:** Here be dragons. The console is very immature, but it's much more
-cleanly architected than previous incarnations and it'll only get better from
-here on in.
-
-Execute arbitrary remote commands, to use this simply add
-`require 'capistrano/console'` which will add the necessary tasks to your
-environment:
-
-``` sh
-$ bundle exec cap staging console
-```
-
-Then, after setting up the server connections, this is how that might look:
-
-``` sh
-$ bundle exec cap production console
-capistrano console - enter command to execute on production
-production> uptime
- INFO [94db8027] Running /usr/bin/env uptime on leehambley@example.com:22
-DEBUG [94db8027] Command: /usr/bin/env uptime
-DEBUG [94db8027]   17:11:17 up 50 days, 22:31,  1 user,  load average: 0.02, 0.02, 0.05
- INFO [94db8027] Finished in 0.435 seconds command successful.
-production> who
- INFO [9ce34809] Running /usr/bin/env who on leehambley@example.com:22
-DEBUG [9ce34809] Command: /usr/bin/env who
-DEBUG [9ce34809]  leehambley pts/0        2013-06-13 17:11 (port-11262.pppoe.wtnet.de)
- INFO [9ce34809] Finished in 0.420 seconds command successful.
-```
-
-## A word about PTYs
-
-There is a configuration option which asks the backend driver to ask the remote host
-to assign the connection a *pty*. A *pty* is a pseudo-terminal, which in effect means
-*tell the backend that this is an **interactive** session*. This is normally a bad idea.
-
-Most of the differences are best explained by [this page](https://github.com/sstephenson/rbenv/wiki/Unix-shell-initialization) from the author of *rbenv*.
-
-**When Capistrano makes a connection it is a *non-login*, *non-interactive* shell.
-This was not an accident!**
-
-It's often used as a band aid to cure issues related to RVM and rbenv not loading login
-and shell initialisation scripts. In these scenarios RVM and rbenv are the tools at fault,
-or at least they are being used incorrectly.
-
-Whilst, especially in the case of language runtimes (Ruby, Node, Python and friends in
-particular) there is a temptation to run multiple versions in parallel on a single server
-and to switch between them using environmental variables, this is an anti-pattern, and
-symptomatic of bad design (e.g. you're testing a second version of Ruby in production because
-your company lacks the infrastructure to test this in a staging environment).
-
-## Configuration
-
-The following variables are settable:
-
-| Variable Name         | Description                                                          | Notes                                                           |
-|:---------------------:|----------------------------------------------------------------------|-----------------------------------------------------------------|
-| `:repo_url`           | The URL of your Git repository                                       | file://, https://, or ssh:// are all supported                  |
-| `:tmp_dir`            | The (optional) temp directory that will be used (default: /tmp)      | if you have a shared web host, this setting may need to be set (i.e. /home/user/tmp/capistrano). |
-
-__Support removed__ for following variables:
-
-| Variable Name         | Description                                                         | Notes                                                           |
-|:---------------------:|---------------------------------------------------------------------|-----------------------------------------------------------------|
-| `:copy_exclude`       | The (optional) array of files and/or folders excluded from deploy | Replaced by Git's native `.gitattributes`, see [#515](https://github.com/capistrano/capistrano/issues/515) for more info. |
-
-## SSHKit
-
-[SSHKit](https://github.com/leehambley/sshkit) is the driver for SSH
-connections behind the scenes in Capistrano. Depending on how deep you dig, you
-might run into interfaces that come directly from SSHKit (the configuration is
-a good example).
-
-## Licence
-
-The MIT License (MIT)
-
-Copyright (c) 2012-2013 Tom Clements, Lee Hambley
+Copyright (c) 2012-2015 Tom Clements, Lee Hambley
 
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal

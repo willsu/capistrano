@@ -1,4 +1,7 @@
-require 'fileutils'
+require "English"
+require "fileutils"
+require "pathname"
+
 module TestApp
   extend self
 
@@ -7,15 +10,16 @@ module TestApp
   end
 
   def default_config
-    %{
+    <<-CONFIG
       set :deploy_to, '#{deploy_to}'
       set :repo_url, 'git://github.com/capistrano/capistrano.git'
       set :branch, 'master'
-      set :ssh_options, { keys: "\#{ENV['HOME']}/.vagrant.d/insecure_private_key" }
+      set :ssh_options, { keys: "\#{ENV['HOME']}/.vagrant.d/insecure_private_key", auth_methods: ['publickey'] }
       server 'vagrant@localhost:2220', roles: %w{web app}
       set :linked_files, #{linked_files}
       set :linked_dirs, #{linked_dirs}
-    }
+      set :format_options, log_file: nil
+    CONFIG
   end
 
   def linked_files
@@ -27,39 +31,45 @@ module TestApp
   end
 
   def linked_dirs
-    %w{bin log public/system vendor/bundle}
+    %w{bin log public/system}
   end
 
   def create_test_app
     FileUtils.rm_rf(test_app_path)
     FileUtils.mkdir(test_app_path)
 
-    File.open(gemfile, 'w+') do |file|
+    File.open(gemfile, "w+") do |file|
       file.write "gem 'capistrano', path: '#{path_to_cap}'"
     end
 
     Dir.chdir(test_app_path) do
-      %x[bundle]
+      `bundle`
     end
   end
 
   def install_test_app_with(config)
     create_test_app
     Dir.chdir(test_app_path) do
-      %x[bundle exec cap install STAGES=#{stage}]
+      `bundle exec cap install STAGES=#{stage}`
     end
     write_local_deploy_file(config)
   end
 
   def write_local_deploy_file(config)
-    File.open(test_stage_path, 'w') do |file|
+    File.open(test_stage_path, "w") do |file|
       file.write config
+    end
+  end
+
+  def append_to_deploy_file(config)
+    File.open(test_stage_path, "a") do |file|
+      file.write config + "\n"
     end
   end
 
   def prepend_to_capfile(config)
     current_capfile = File.read(capfile)
-    File.open(capfile, 'w') do |file|
+    File.open(capfile, "w") do |file|
       file.write config
       file.write current_capfile
     end
@@ -70,7 +80,7 @@ module TestApp
   end
 
   def create_shared_file(path)
-    File.open(shared_path.join(path), 'w')
+    File.open(shared_path.join(path), "w")
   end
 
   def cap(task)
@@ -78,38 +88,39 @@ module TestApp
   end
 
   def run(command)
+    output = nil
     Dir.chdir(test_app_path) do
-      %x[#{command}]
+      output = `#{command}`
     end
-    $?.success?
+    [$CHILD_STATUS.success?, output]
   end
 
   def stage
-    'test'
+    "test"
   end
 
   def test_stage_path
-    test_app_path.join('config/deploy/test.rb')
+    test_app_path.join("config/deploy/test.rb")
   end
 
   def test_app_path
-    Pathname.new('/tmp/test_app')
+    Pathname.new("/tmp/test_app")
   end
 
   def deploy_to
-    Pathname.new('/home/vagrant/var/www/deploy')
+    Pathname.new("/home/vagrant/var/www/deploy")
   end
 
   def shared_path
-    deploy_to.join('shared')
+    deploy_to.join("shared")
   end
 
   def current_path
-    deploy_to.join('current')
+    deploy_to.join("current")
   end
 
   def releases_path
-    deploy_to.join('releases')
+    deploy_to.join("releases")
   end
 
   def release_path
@@ -121,19 +132,19 @@ module TestApp
   end
 
   def repo_path
-    deploy_to.join('repo')
+    deploy_to.join("repo")
   end
 
   def path_to_cap
-    File.expand_path('.')
+    File.expand_path(".")
   end
 
   def gemfile
-    test_app_path.join('Gemfile')
+    test_app_path.join("Gemfile")
   end
 
   def capfile
-    test_app_path.join('Capfile')
+    test_app_path.join("Capfile")
   end
 
   def current_user
@@ -141,7 +152,7 @@ module TestApp
   end
 
   def task_dir
-    test_app_path.join('lib/capistrano/tasks')
+    test_app_path.join("lib/capistrano/tasks")
   end
 
   def copy_task_to_test_app(source)
@@ -149,15 +160,15 @@ module TestApp
   end
 
   def config_path
-    test_app_path.join('config')
+    test_app_path.join("config")
   end
 
   def move_configuration_to_custom_location(location)
     prepend_to_capfile(
-      %{
+      <<-CONFIG
         set :stage_config_path, "app/config/deploy"
         set :deploy_config_path, "app/config/deploy.rb"
-      }
+      CONFIG
     )
 
     location = test_app_path.join(location)
@@ -165,4 +176,7 @@ module TestApp
     FileUtils.mv(config_path, location)
   end
 
+  def git_wrapper_path
+    "/tmp/git-ssh-my_app_name-#{stage}-#{current_user}.sh"
+  end
 end
